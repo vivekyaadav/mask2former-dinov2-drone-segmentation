@@ -1,0 +1,19 @@
+# Core
+torch>=2.10.0
+torchvision
+
+# Detectron2 — install separately (not on PyPI):
+#   pip install --no-build-isolation git+https://github.com/facebookresearch/detectron2.git
+# Mask2Former — clone separately (not a pip package):
+#   git clone https://github.com/facebookresearch/Mask2Former.git
+
+timm
+einops
+scipy
+opencv-python
+pycocotools
+shapely
+wandb
+panopticapi
+numpy
+Pillow

@@ -1,0 +1,36 @@
+# ==== Dataset & annotations — NEVER commit ====
+data/
+*.tif
+*.tiff
+instances_*.json
+panoptic_*.json
+sem_seg_*.json
+*coco*.json
+
+# ==== Model weights — host on Hugging Face, not GitHub ====
+*.pth
+*.pt
+*.ckpt
+checkpoints/
+output/
+
+# ==== Environment / secrets ====
+.env
+.env.*
+*.pem
+id_rsa*
+wandb/
+
+# ==== System / editor junk ====
+.DS_Store
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# ==== Python ====
+venv/
+*.egg-info/
+build/
+dist/
