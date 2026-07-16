@@ -66,6 +66,7 @@ The class index in a prediction map corresponds directly to this table.
 │   ├── environment_setup.sh              # install deps + fork + patches + DINOv2 weights
 │   ├── prepare_semantic_dataset.py       # COCO instances -> 9-class semantic PNG masks
 │   ├── build_augmentation.py            # OPTIONAL offline aug used for the 74.45% result
+│   ├── ortho_pipeline.py                 # end-to-end raw TIFF -> shapefile inference pipeline
 │   └── train.sh                          # launcher (wraps train_semantic_v6.py)
 ├── requirements.txt
 ├── HF_MODEL_CARD.md
@@ -198,6 +199,50 @@ Per-class validation IoU at the best checkpoint (iter 24 000):
 | solar_panel | 63.59 |
 | vehicle | 80.09 |
 | **mIoU** | **74.45** |
+
+## Running inference
+
+`scripts/ortho_pipeline.py` runs the full pipeline end-to-end on a raw drone orthomosaic:
+GSD detection → resample to 5cm → tile → DINOv2 + Mask2Former inference → vectorize →
+package as a shapefile/GeoPackage zip. This is the exact script used to produce production
+outputs on real village orthomosaics.
+
+**Requirements (beyond `requirements.txt`):** `rasterio`, `fiona`, `shapely`. The DINOv2
+pretrained checkpoint (`dinov2_vitb14_pretrain.pth`) is not needed for inference — only for
+training from scratch; the trained checkpoint is self-contained.
+
+**Setup:**
+
+1. Follow [Setup](#setup) to install Detectron2 + Mask2Former + `mask2former_patches/`.
+2. Download `mask2former-dinov2-drone-seg-9cls.pth` from Hugging Face and place it (or point
+   `WEIGHTS` at the top of `ortho_pipeline.py`) to match your setup.
+
+**Usage:**
+
+```bash
+# Auto-detect source GSD from the GeoTIFF:
+python3 scripts/ortho_pipeline.py --input village.tif
+
+# Specify source GSD manually (metres), if auto-detection is unreliable:
+python3 scripts/ortho_pipeline.py --input village.tif --gsd 0.035
+
+# Full control:
+python3 scripts/ortho_pipeline.py \
+    --input   village.tif \
+    --gsd     0.035 \
+    --out     ./output/myvillage \
+    --name    myvillage \
+    --workers 48 \
+    --min-px  500
+```
+
+- **Supported source GSD:** 2cm–10cm; always resampled to 5cm for inference (the model was
+  trained on 3.5–5cm imagery).
+- **Output:** `<out>/<name>_segmentation.zip` containing `<name>.gpkg` (all 9 classes,
+  pre-styled for QGIS) plus per-class shapefiles (`.shp`/`.shx`/`.dbf`/`.cpg`/`.prj`) and a
+  `README.txt`.
+- **Resumable:** rerun the same command after an interruption — completed resampling and
+  tiles are skipped automatically.
 
 ## Pretrained weights
 

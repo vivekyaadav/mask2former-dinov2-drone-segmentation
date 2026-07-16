@@ -51,9 +51,17 @@ This is a Detectron2 + Mask2Former model with a **custom DINOv2 backbone and pat
 matcher/criterion**. You need the training repo (for the config and the patched fork), not
 just stock Mask2Former.
 
+**Recommended — end-to-end inference.** For inference on a raw drone orthomosaic
+(TIFF → shapefile output), use `scripts/ortho_pipeline.py` from the training repo:
+[github.com/vivekyaadav/mask2former-dinov2-drone-segmentation](https://github.com/vivekyaadav/mask2former-dinov2-drone-segmentation).
+It handles GSD resampling, tiling, inference, and vectorization automatically, and writes a
+styled GeoPackage + per-class shapefiles. This is the path that matches how the model is
+actually run in production.
+
+First, set up the fork + patches (see the training repo's `environment_setup.sh`) and
+download the checkpoint:
+
 ```bash
-# 1. Set up the fork + patches (see the training repo's environment_setup.sh)
-# 2. Download the checkpoint
 python - <<'PY'
 from huggingface_hub import hf_hub_download
 ckpt = hf_hub_download(
@@ -62,6 +70,10 @@ ckpt = hf_hub_download(
 print(ckpt)
 PY
 ```
+
+**Alternative — raw per-tile inference.** If you only want the low-level Detectron2
+predictor on individual 1024px tiles (no geospatial resampling/tiling/vectorization), use
+`DefaultPredictor` directly:
 
 ```python
 import cv2, torch
