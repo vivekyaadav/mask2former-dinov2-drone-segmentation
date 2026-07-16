@@ -4,16 +4,15 @@ torchvision
 
 # Detectron2 — install separately (not on PyPI):
 #   pip install --no-build-isolation git+https://github.com/facebookresearch/detectron2.git
-# Mask2Former — clone separately (not a pip package):
+# Mask2Former — clone separately, then copy in mask2former_patches/ (see environment_setup.sh)
 #   git clone https://github.com/facebookresearch/Mask2Former.git
 
-timm
+timm            # provides vit_base_patch14_dinov2 for the DINOv2 backbone
 einops
 scipy
 opencv-python
 pycocotools
 shapely
-wandb
-panopticapi
 numpy
 Pillow
+tensorboard     # SemanticMonitor writes TB logs

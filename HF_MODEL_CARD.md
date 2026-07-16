@@ -12,110 +12,98 @@ pipeline_tag: image-segmentation
 library_name: pytorch
 ---
 
-# Mask2Former-DINOv2 — Indian Urban Drone Semantic Segmentation
+# Mask2Former-DINOv2 — Drone Semantic Segmentation (9-class)
 
-A **Mask2Former** semantic segmentation model with a **DINOv2 ViT-B/14** backbone, fine-tuned for 15-class land-cover segmentation of high-resolution Indian urban drone/orthomosaic imagery.
+A **Mask2Former** semantic segmentation model with a **DINOv2 ViT-B/14** backbone,
+full fine-tuned (no LoRA) for **9-class** land-cover segmentation of high-resolution
+drone / orthomosaic imagery.
 
-- **Best validation mIoU:** 74.45%
-- **Input:** RGB image tiles (512px, orthomosaic-derived)
-- **Output:** Per-pixel semantic class map (15 classes)
-- **Backbone:** [facebookresearch/dinov2](https://github.com/facebookresearch/dinov2) ViT-B/14
-- **Architecture:** [facebookresearch/Mask2Former](https://github.com/facebookresearch/Mask2Former)
-- **Training code:** [link to your GitHub repo]
+- **Best validation mIoU:** 74.45% (checkpoint `mask2former-dinov2-drone-seg-9cls.pth`, iter 24 000)
+- **Input:** RGB image tiles at **1024px**
+- **Output:** Per-pixel semantic class map (9 classes; head emits 9 + "no object")
+- **Backbone:** [facebookresearch/dinov2](https://github.com/facebookresearch/dinov2) ViT-B/14 (`vit_base_patch14_dinov2`)
+- **Architecture:** [facebookresearch/Mask2Former](https://github.com/facebookresearch/Mask2Former) + DINOv2 backbone
+- **Training code:** https://github.com/vivekyaadav/mask2former-dinov2-drone-segmentation
 
-> This model was trained on a private, custom-annotated dataset. The dataset itself is not released with this model.
+> Trained on a private, custom-annotated dataset. The dataset is not released.
+
+## Class taxonomy (0-indexed)
+
+| ID | Class | | ID | Class |
+|----|-------|--|----|-------|
+| 0 | building_rcc | | 5 | overhead_tank |
+| 1 | building_tin | | 6 | well |
+| 2 | building_tiled | | 7 | solar_panel |
+| 3 | building_others | | 8 | vehicle |
+| 4 | waterbody | | | |
+
+The predicted class-index map maps directly to this table; `255` = ignore.
 
 ## Intended use
 
-Semantic segmentation of urban land-cover categories — building types, road surfaces, water bodies, vehicles, and small infrastructure (tanks, wells, solar panels) — from top-down drone or orthomosaic imagery, primarily over Indian urban environments. Intended for research and GIS/urban-planning prototyping. Not validated for safety-critical or production geospatial decision-making.
+Semantic segmentation of urban/rural land-cover — building types, water bodies, and small
+infrastructure (tanks, wells, solar panels, vehicles) — from top-down drone or orthomosaic
+imagery. Research / GIS prototyping only; not validated for safety-critical use.
 
 ## How to use
 
-### 1. Install dependencies
+This is a Detectron2 + Mask2Former model with a **custom DINOv2 backbone and patched
+matcher/criterion**. You need the training repo (for the config and the patched fork), not
+just stock Mask2Former.
 
 ```bash
-pip install torch torchvision detectron2 huggingface_hub
-git clone https://github.com/facebookresearch/Mask2Former.git
-cd Mask2Former && pip install -r requirements.txt
-```
-
-### 2. Download the checkpoint
-
-```python
+# 1. Set up the fork + patches (see the training repo's environment_setup.sh)
+# 2. Download the checkpoint
+python - <<'PY'
 from huggingface_hub import hf_hub_download
-
-ckpt_path = hf_hub_download(
-    repo_id="YOUR_HF_USERNAME/mask2former-dinov2-drone-segmentation",
-    filename="model_best_v6.pth"
-)
+ckpt = hf_hub_download(
+    repo_id="vivekyaadav/mask2former-dinov2-drone-segmentation",
+    filename="mask2former-dinov2-drone-seg-9cls.pth")
+print(ckpt)
+PY
 ```
-
-Or via CLI:
-
-```bash
-huggingface-cli download YOUR_HF_USERNAME/mask2former-dinov2-drone-segmentation model_best_v6.pth --local-dir .
-```
-
-### 3. Run inference
 
 ```python
-import torch
+import cv2, torch
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from detectron2.projects.deeplab import add_deeplab_config
 from mask2former import add_maskformer2_config
+from mask2former.config import add_dinov2_config   # from the patched fork
 
 cfg = get_cfg()
 add_deeplab_config(cfg)
 add_maskformer2_config(cfg)
-cfg.merge_from_file("configs/drone/panoptic_512.yaml")   # from the training repo
-cfg.MODEL.WEIGHTS = ckpt_path
+add_dinov2_config(cfg)
+cfg.merge_from_file("configs/drone/drone_dinov2_semantic_v6.yaml")  # from the training repo
+cfg.MODEL.WEIGHTS = ckpt
 cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 predictor = DefaultPredictor(cfg)
-
-import cv2
-image = cv2.imread("your_tile.png")  # BGR, 512x512 recommended
-outputs = predictor(image)
-sem_seg = outputs["sem_seg"].argmax(dim=0).cpu().numpy()  # HxW class-index map
+image = cv2.imread("your_tile.png")          # BGR; 1024px recommended
+sem = predictor(image)["sem_seg"].argmax(0).cpu().numpy()  # HxW class-index map (0..8)
 ```
-
-## Class taxonomy
-
-| ID | Class | Type |
-|----|-------|------|
-| 1 | building_rcc | thing |
-| 2 | building_tin | thing |
-| 3 | building_tiled | thing |
-| 4 | building_others | thing |
-| 5 | road_paved | stuff |
-| 6 | road_mud | stuff |
-| 7 | waterbody | stuff |
-| 8 | overhead_tank | thing |
-| 9 | well | thing |
-| 10 | solar_panel | thing |
-| 11 | vehicle_car | thing |
-| 12 | vehicle_truck | thing |
-| 13 | vehicle_two_wheeler | thing |
-| 14 | vehicle_bus | thing |
-| 15 | vehicle_others | thing |
 
 ## Training details
 
 | | |
 |---|---|
-| Backbone | DINOv2 ViT-B/14 |
-| Head | Mask2Former (semantic mode) |
-| Resolution | 512px |
-| Framework | Detectron2 |
-| Hardware | 1x RTX 5090 |
-| Best val mIoU | 74.45% (Run 6) |
+| Backbone | DINOv2 ViT-B/14, full fine-tune (no LoRA) |
+| Head | Mask2Former, semantic mode, 200 queries, 10 decoder layers |
+| Resolution | 1024px (train & test) |
+| Batch / iters | 6 / 60 000 (AdamW, LR 5e-5 cosine → 1e-6, warmup 3000) |
+| Rare-class handling | RareClassBalancedSampler 65% + per-class CE / match-cost / Dice weights |
+| Framework | Detectron2, PyTorch 2.10 |
+| Hardware | 1× RTX 5090 |
+| Best val mIoU | 74.45% (iter 24 000) |
 
 ## Limitations
 
-- Trained on a specific regional distribution (Indian urban orthomosaic imagery); performance on other geographies, sensors, or resolutions is untested.
-- Dataset size and class balance are not disclosed; treat performance claims as indicative, not benchmarked against a public standard.
-- Not evaluated for adversarial robustness or edge-case terrain (e.g. informal settlements, mixed-use zones) beyond what's in the private validation set.
+- Trained on a specific regional distribution; performance on other geographies, sensors,
+  or resolutions is untested.
+- Dataset size and class balance are not disclosed; treat performance as indicative.
+- Heavy class imbalance (building_rcc ≈ 84% of pixels); rare classes such as overhead_tank
+  remain comparatively weak (IoU ≈ 36).
 
 ## Citation
 

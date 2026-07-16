@@ -1,61 +1,51 @@
 #!/bin/bash
 # ============================================================
-# train.sh
+# train.sh — launch the ACTUAL v6 semantic run
 #
-# Usage: bash train.sh [512|1024] [batch_size]
-# Examples:
-#   bash train.sh 512       -> 512px, default batch 16
-#   bash train.sh 1024      -> 1024px, default batch 4
-#   bash train.sh 512 8     -> 512px, batch 8
+# Reproduces model_best_v6.pth (74.45% val mIoU):
+#   DINOv2 ViT-B/14 + Mask2Former, full fine-tune (no LoRA),
+#   9-class semantic segmentation at 1024px, batch 6, 60k iters,
+#   RareClassBalancedSampler + per-class matching/Dice weights.
+#
+# Prerequisites (see README "Setup"):
+#   1. A clone of the Mask2Former fork with the DINOv2 backbone at $M2F_ROOT.
+#   2. The mask2former_patches/ files copied into that fork (matcher.py,
+#      criterion.py, config.py, backbone/dinov2_vitadapter.py) — WITHOUT them
+#      the per-class costs/Dice are silently ignored and results won't match.
+#   3. Data prepared by scripts/prepare_semantic_dataset.py at $DRONE_DATA_ROOT.
+#   4. dinov2_vitb14_pretrain.pth at $DINOV2_WEIGHTS.
+#
+# Usage: bash scripts/train.sh
 # ============================================================
-
 set -e
 
-RESOLUTION=${1:-512}
-BATCH=${2:-"default"}
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-M2F_DIR="${M2F_DIR:-/workspace/Mask2Former}"
-LOG_DIR="/workspace/output/drone_${RESOLUTION}"
-
-if [[ "$RESOLUTION" != "512" && "$RESOLUTION" != "1024" ]]; then
-    echo "ERROR: Resolution must be 512 or 1024"
-    exit 1
-fi
-
-CONFIG="$SCRIPT_DIR/../configs/drone/panoptic_${RESOLUTION}.yaml"
-if [[ "$BATCH" == "default" ]]; then
-    if [[ "$RESOLUTION" == "512" ]]; then
-        BATCH=16
-    else
-        BATCH=4
-    fi
-fi
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+M2F_ROOT="${M2F_ROOT:-/workspace/Mask2Former}"
+DRONE_DATA_ROOT="${DRONE_DATA_ROOT:-/workspace/data}"
+DINOV2_WEIGHTS="${DINOV2_WEIGHTS:-/workspace/checkpoints/dinov2_vitb14_pretrain.pth}"
+OUTPUT_DIR="${OUTPUT_DIR:-/workspace/output/drone_dinov2_semantic_v6}"
 
 echo "============================================"
-echo "  Launching Mask2Former Training"
-echo "  Resolution : ${RESOLUTION}px"
-echo "  Batch size : ${BATCH}"
-echo "  Config     : $CONFIG"
-echo "  Output     : $LOG_DIR"
+echo "  Mask2Former + DINOv2 — semantic v6"
+echo "  M2F_ROOT        : $M2F_ROOT"
+echo "  DRONE_DATA_ROOT : $DRONE_DATA_ROOT"
+echo "  DINOV2_WEIGHTS  : $DINOV2_WEIGHTS"
+echo "  OUTPUT_DIR      : $OUTPUT_DIR"
 echo "============================================"
 
-# Step 1: Copy configs into the Mask2Former repo (so its _BASE_ paths resolve)
-mkdir -p "$M2F_DIR/configs/drone"
-cp "$SCRIPT_DIR"/../configs/drone/*.yaml "$M2F_DIR/configs/drone/"
+# Make the v6 config resolvable from inside the fork.
+mkdir -p "$M2F_ROOT/configs/drone"
+cp "$REPO_DIR/configs/drone/drone_dinov2_semantic_v6.yaml" "$M2F_ROOT/configs/drone/"
+mkdir -p "$OUTPUT_DIR"
 
-# Step 2: Register the dataset in train_net.py
-python3 "$SCRIPT_DIR/register_dataset.py"
-
-# Step 3: Create output dir
-mkdir -p "$LOG_DIR"
-
-# Step 4: Launch training
-cd "$M2F_DIR"
-OMP_NUM_THREADS=4 python train_net.py \
-    --config-file "configs/drone/panoptic_${RESOLUTION}.yaml" \
+cd "$M2F_ROOT"
+export M2F_ROOT DRONE_DATA_ROOT
+OMP_NUM_THREADS=4 python "$REPO_DIR/train_semantic_v6.py" \
+    --config-file "configs/drone/drone_dinov2_semantic_v6.yaml" \
     --num-gpus 1 \
-    SOLVER.IMS_PER_BATCH "$BATCH" \
-    OUTPUT_DIR "$LOG_DIR" \
-    2>&1 | tee "$LOG_DIR/train.log"
+    MODEL.WEIGHTS "$DINOV2_WEIGHTS" \
+    OUTPUT_DIR "$OUTPUT_DIR" \
+    2>&1 | tee "$OUTPUT_DIR/train.log"
 
-echo "Training complete. Checkpoints saved to $LOG_DIR"
+echo "Done. Best checkpoint: $OUTPUT_DIR/model_best.pth"
+echo "(The published model_best_v6.pth is a copy of model_best.pth at its peak.)"

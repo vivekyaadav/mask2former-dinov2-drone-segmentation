@@ -1,5 +1,9 @@
-# ==== Dataset & annotations — NEVER commit ====
+# ==== Dataset, masks & annotations — NEVER commit ====
 data/
+images/
+semantic_masks_9cls/
+semantic_masks_9cls_aug_v2/
+images_augmented_v2/
 *.tif
 *.tiff
 instances_*.json
@@ -23,6 +27,7 @@ wandb/
 
 # ==== System / editor junk ====
 .DS_Store
+._*
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
@@ -34,4 +39,3 @@ venv/
 *.egg-info/
 build/
 dist/
-._*

@@ -1,0 +1,131 @@
+# ============================================================
+# DINOv2 + Mask2Former | Semantic Segmentation v6 | Drone
+# ============================================================
+# Fresh start from DINOv2 pretrained — no run 2 warm start.
+# No LoRA — full fine-tune of all 90M params (same as run 2).
+#
+# New over run 2:
+#   - Per-class Hungarian matching cost (matcher.py patched)
+#   - Per-class Dice weights (criterion.py patched, NaN fixed)
+#   - RareClassBalancedSampler 65%
+#   - Better class weights (run 3/4 lessons)
+#   - CLIP_VALUE: 0.3 (was 0.5 in run 2)
+#   - MAX_ITER: 60000 (was 30000 in run 2)
+#   - WARMUP_ITERS: 3000 (5% of 60000)
+# ============================================================
+
+MODEL:
+  META_ARCHITECTURE: "MaskFormer"
+  BACKBONE:
+    NAME: "build_dinov2_vitadapter_backbone"
+
+  # Fresh start — DINOv2 pretrained only, no task-specific warm start
+  WEIGHTS: "/workspace/checkpoints/dinov2_vitb14_pretrain.pth"
+
+  PIXEL_MEAN: [123.675, 116.280, 103.530]
+  PIXEL_STD:  [58.395,  57.120,  57.375]
+
+  DINOV2:
+    MODEL_NAME: "vit_base_patch14_dinov2"
+    FREEZE_BACKBONE: False
+
+  SEM_SEG_HEAD:
+    NAME: "MaskFormerHead"
+    NUM_CLASSES: 9
+    IN_FEATURES: ["res2", "res3", "res4", "res5"]
+    IGNORE_VALUE: 255
+    PIXEL_DECODER_NAME: "MSDeformAttnPixelDecoder"
+
+  MASK_FORMER:
+    TRANSFORMER_DECODER_NAME: "MultiScaleMaskedTransformerDecoder"
+    TRANSFORMER_IN_FEATURE: "multi_scale_pixel_decoder"
+    NUM_OBJECT_QUERIES: 200
+    DEC_LAYERS: 10
+    HIDDEN_DIM: 256
+    NHEADS: 8
+    DIM_FEEDFORWARD: 2048
+    DROPOUT: 0.1
+    PRE_NORM: False
+    ENFORCE_INPUT_PROJ: False
+    SIZE_DIVISIBILITY: 32
+
+    TEST:
+      PANOPTIC_ON: False
+      INSTANCE_ON: False
+      SEMANTIC_ON: True
+      OVERLAP_THRESHOLD: 0.8
+      OBJECT_MASK_THRESHOLD: 0.8
+      SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE: True
+
+    TRAIN_NUM_POINTS: 12544
+    OVERSAMPLE_RATIO: 3.0
+    IMPORTANCE_SAMPLE_RATIO: 0.75
+    DEEP_SUPERVISION: True
+
+    # Per-class costs injected via inject_weights_and_costs() in train.py
+    NO_OBJECT_WEIGHT: 0.1
+    CLASS_WEIGHT: 4.0
+    MASK_WEIGHT: 5.0
+    DICE_WEIGHT: 5.0
+
+DATASETS:
+  TRAIN: ("drone_semantic_train",)
+  TEST:  ("drone_semantic_val",)
+
+DATALOADER:
+  NUM_WORKERS: 16
+  FILTER_EMPTY_ANNOTATIONS: True
+
+INPUT:
+  DATASET_MAPPER_NAME: "mask_former_semantic"
+  IMAGE_SIZE: 1024
+  MIN_SCALE: 0.1
+  MAX_SCALE: 2.0
+  FORMAT: "RGB"
+  RANDOM_FLIP: "horizontal"
+  MIN_SIZE_TRAIN: (1024,)
+  MIN_SIZE_TRAIN_SAMPLING: "choice"
+  MAX_SIZE_TRAIN: 2048
+  MIN_SIZE_TEST: 1024
+  MAX_SIZE_TEST: 2048
+
+SOLVER:
+  AMP:
+    ENABLED: True
+  IMS_PER_BATCH: 6
+
+  BASE_LR: 0.00005                  # 5e-5 — same as run 2 (full fine-tune from scratch needs higher LR)
+  BASE_LR_END: 0.000001             # 1e-6 cosine end
+  MAX_ITER: 60000                   # 60k — more convergence time than run 2's 30k
+
+  LR_SCHEDULER_NAME: "WarmupCosineLR"
+  WARMUP_FACTOR: 0.001
+  WARMUP_ITERS: 3000                # 5% of 60000
+  WARMUP_METHOD: "linear"
+  STEPS: (48000, 54000)             # unused with cosine
+  GAMMA: 0.1
+
+  OPTIMIZER: "ADAMW"
+  BACKBONE_MULTIPLIER: 0.1
+
+  # CLIP_VALUE: 0.3
+  # Run 2: 0.5 → spikes to 382
+  # Run 6: 0.3 → tighter but not as aggressive as run 3's 0.1
+  CLIP_GRADIENTS:
+    ENABLED: True
+    CLIP_TYPE: "full_model"
+    CLIP_VALUE: 0.3
+    NORM_TYPE: 2.0
+
+  WEIGHT_DECAY: 0.05
+  WEIGHT_DECAY_NORM: 0.0
+  WEIGHT_DECAY_EMBED: 0.0
+  CHECKPOINT_PERIOD: 6000           # 10 checkpoints over 60000 iters
+
+TEST:
+  EVAL_PERIOD: 2000                 # 30 evals over 60000 iters
+  AUG:
+    ENABLED: False
+
+OUTPUT_DIR: "/workspace/output/drone_dinov2_semantic_v6"
+VERSION: 2
