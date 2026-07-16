@@ -34,3 +34,4 @@ venv/
 *.egg-info/
 build/
 dist/
+._*
