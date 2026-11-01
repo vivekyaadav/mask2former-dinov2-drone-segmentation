@@ -200,16 +200,22 @@ Per-class validation IoU at the best checkpoint (iter 24 000):
 | vehicle | 80.09 |
 | **mIoU** | **74.45** |
 
-### Qualitative examples
+### Inference results
 
 <p align="center">
-  <img src="assets/best_example.png" width="80%"/>
+  <img src="assets/best_example.png" width="100%"/>
 </p>
 
 <p align="center">
-  <img src="assets/candidate1.png" width="32%"/>
-  <img src="assets/candidate2.png" width="32%"/>
-  <img src="assets/candidate3.png" width="32%"/>
+  <img src="assets/candidate1.png" width="100%"/>
+</p>
+
+<p align="center">
+  <img src="assets/candidate2.png" width="100%"/>
+</p>
+
+<p align="center">
+  <img src="assets/candidate3.png" width="100%"/>
 </p>
 
 ## Running inference
