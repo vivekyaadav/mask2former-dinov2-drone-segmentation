@@ -200,6 +200,18 @@ Per-class validation IoU at the best checkpoint (iter 24 000):
 | vehicle | 80.09 |
 | **mIoU** | **74.45** |
 
+### Qualitative examples
+
+<p align="center">
+  <img src="assets/best_example.png" width="80%"/>
+</p>
+
+<p align="center">
+  <img src="assets/candidate1.png" width="32%"/>
+  <img src="assets/candidate2.png" width="32%"/>
+  <img src="assets/candidate3.png" width="32%"/>
+</p>
+
 ## Running inference
 
 `scripts/ortho_pipeline.py` runs the full pipeline end-to-end on a raw drone orthomosaic:
